@@ -1,0 +1,49 @@
+============================================================
+        FARMTECH SOLUTIONS - REGISTRO DE LOG
+============================================================
+
+Data/hora da captura: 21/09/2026 13:45:29
+
+============================================================
+
+
+============================================================
+              FARMTECH SOLUTIONS - LOG
+============================================================
+
+STATUS DA IRRIGACAO
+Bomba: ATIVA
+Pontuacao multicriterio: 5
+
+NUTRIENTES:
+Nitrogenio (N): ATIVO | Nivel: 70.0 | ATENDIDO
+Fosforo (P): ATIVO | Nivel: 54.0 | NECESSIDADE
+Potassio (K): ATIVO | Nivel: 58.0 | NECESSIDADE
+
+SENSORES:
+DHT22 - Temperatura: 23.50 C
+DHT22 - Umidade medida: 45.80 %
+Umidade simulada: 79.80 %
+LDR: 1001
+pH simulado: 5.82
+
+METEOROLOGIA:
+Nenhum dado meteorologico recebido.
+
+DECISAO MULTICRITERIO:
+Pontuacao: 5
++0 Umidade adequada
++0 pH adequado
++1 Necessidade de Fosforo
++1 Necessidade de Potassio
+
+DECISAO: IRRIGAR
+Motivo: necessidade multicriterio e ausencia de chuva relevante.
+
+STATUS: IRRIGACAO ATIVA
+============================================================
+########### LOG_FIM ###########
+
+============================================================
+                 FIM DO REGISTRO
+============================================================

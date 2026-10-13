@@ -1,0 +1,1359 @@
+---
+title: "FarmTech Solutions"
+subtitle: "Sistema de Irrigação Inteligente — Análise Automatizada | Fase 2"
+author: "Lucas Bohrer"
+date: today
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-title: "Navegação"
+    number-sections: true
+    self-contained: true
+    smooth-scroll: true
+    code-fold: true
+    code-summary: "Mostrar código"
+    page-layout: article
+execute:
+  warning: false
+  message: false
+---
+
+<style>
+
+body {
+  background-color: #f7f9fb;
+}
+
+.quarto-title-block {
+  padding: 2rem 2rem 1.5rem 2rem;
+  border-radius: 12px;
+  margin-bottom: 2rem;
+  background: linear-gradient(135deg, #0f5132, #198754);
+  color: white;
+}
+
+.quarto-title-block .title {
+  color: white;
+  font-weight: 700;
+}
+
+.quarto-title-block .subtitle {
+  color: #e9f7ef;
+}
+
+.quarto-title-block .quarto-title-meta {
+  color: #e9f7ef;
+}
+
+.card-farmtech {
+  background: white;
+  border-radius: 12px;
+  padding: 1.2rem;
+  margin-bottom: 1rem;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.card-farmtech h3 {
+  margin-top: 0;
+  font-size: 1rem;
+  color: #495057;
+}
+
+.card-number {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #198754;
+}
+
+.card-description {
+  color: #6c757d;
+  font-size: 0.9rem;
+}
+
+.callout {
+  border-radius: 10px;
+}
+
+.table {
+  background-color: white;
+}
+
+</style>
+
+# Visão geral {.unnumbered}
+
+Este relatório apresenta a análise automatizada dos dados registrados pelo protótipo de **Sistema de Irrigação Inteligente desenvolvido para a Fase 2 da FarmTech Solutions**.
+
+Os dados são obtidos diretamente dos arquivos de log gerados durante as simulações do sistema embarcado. A análise é realizada utilizando **R**, permitindo que o relatório seja atualizado automaticamente conforme novos registros são adicionados ao diretório de logs.
+
+::: {.callout-tip}
+## Atualização automática
+
+O relatório não depende de uma quantidade fixa de registros.
+
+Sempre que novos arquivos `.txt` forem adicionados à pasta `logs/`, basta executar novamente o processo de renderização do Quarto para atualizar automaticamente:
+
+- indicadores;
+- gráficos;
+- estatísticas;
+- decisões;
+- motivos;
+- ciclos de irrigação;
+- análise temporal;
+- tabelas;
+- ciclo mais recente.
+:::
+
+---
+
+Objetivo
+
+O sistema tem como objetivo demonstrar uma estratégia de decisão para irrigação baseada na combinação de múltiplas condições do ambiente simulado.
+
+A lógica considera:
+
+- umidade;
+- pH;
+- Nitrogênio (N);
+- Fósforo (P);
+- Potássio (K);
+- pontuação multicritério;
+- estado dos nutrientes;
+- estado da bomba;
+- previsão de chuva.
+
+A abordagem busca evitar uma decisão baseada em uma única variável.
+
+A irrigação ocorre quando as condições definidas pela lógica multicritério indicam necessidade e não existe um bloqueio relacionado à previsão meteorológica ou à ausência de nutrientes ativos.
+
+---
+
+Arquitetura da análise
+
+O fluxo utilizado neste relatório é:
+
+```text
+ESP32 + Wokwi
+      │
+      ▼
+Arquivos de log (.txt)
+      │
+      ▼
+R / análise dos dados
+      │
+      ├── Indicadores
+      ├── Decisões
+      ├── Motivos
+      ├── Nutrientes
+      ├── Ambiente
+      ├── Meteorologia
+      └── Ciclos de irrigação
+      │
+      ▼
+Relatório HTML
+```
+
+# Processamento automático dos logs
+
+```{r setup, include=FALSE}
+pastas_logs <- c("logs", "../logs")
+pasta_logs <- pastas_logs[dir.exists(pastas_logs)][1]
+arquivos_log <- if (!is.na(pasta_logs)) {
+  list.files(pasta_logs, pattern = "\\.txt$", full.names = TRUE)
+} else {
+  character()
+}
+
+media_segura <- function(x, na.rm = TRUE) {
+  if (length(x) == 0 || all(is.na(x))) NA_real_ else mean(x, na.rm = na.rm)
+}
+
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(scales)
+
+extrair_numero <- function(linhas, padrao) {
+
+  linha <- linhas[
+    grepl(
+      padrao,
+      linhas
+    )
+  ]
+
+  if (length(linha) == 0) {
+    return(NA_real_)
+  }
+
+  valor <- sub(
+    ".*: ([0-9.]+).*",
+    "\\1",
+    linha[1]
+  )
+
+  suppressWarnings(
+    as.numeric(valor)
+  )
+}
+
+
+extrair_texto <- function(
+  linhas,
+  padrao,
+  prefixo
+) {
+
+  linha <- linhas[
+    grepl(
+      padrao,
+      linhas
+    )
+  ]
+
+  if (length(linha) == 0) {
+    return(NA_character_)
+  }
+
+  sub(
+    prefixo,
+    "",
+    linha[1]
+  )
+}
+
+analisar_log <- function(arquivo) {
+
+  linhas <- readLines(
+    arquivo,
+    warn = FALSE
+  )
+
+  data_hora <- extrair_texto(
+    linhas,
+    "Data/hora da captura:",
+    "^Data/hora da captura: "
+  )
+
+  umidade <- extrair_numero(
+    linhas,
+    "Umidade simulada:"
+  )
+
+  ph <- extrair_numero(
+    linhas,
+    "pH simulado:"
+  )
+
+  pontuacao <- extrair_numero(
+    linhas,
+    "^Pontuacao:"
+  )
+
+  bomba <- extrair_texto(
+    linhas,
+    "^Bomba:",
+    "^Bomba: "
+  )
+
+  decisao <- extrair_texto(
+    linhas,
+    "^DECISAO:",
+    "^DECISAO: "
+  )
+
+  motivo <- extrair_texto(
+    linhas,
+    "^Motivo:",
+    "^Motivo: "
+  )
+
+  nivel_n <- extrair_numero(
+    linhas,
+    "Nitrogenio \\(N\\):"
+  )
+
+  linha_n <- linhas[
+    grepl(
+      "Nitrogenio \\(N\\):",
+      linhas
+    )
+  ]
+
+  status_n <- ifelse(
+    length(linha_n) > 0 &&
+      grepl("ATIVO", linha_n[1]),
+    "ATIVO",
+    "INATIVO"
+  )
+
+  nivel_p <- extrair_numero(
+    linhas,
+    "Fosforo \\(P\\):"
+  )
+
+  linha_p <- linhas[
+    grepl(
+      "Fosforo \\(P\\):",
+      linhas
+    )
+  ]
+
+  status_p <- ifelse(
+    length(linha_p) > 0 &&
+      grepl("ATIVO", linha_p[1]),
+    "ATIVO",
+    "INATIVO"
+  )
+
+  nivel_k <- extrair_numero(
+    linhas,
+    "Potassio \\(K\\):"
+  )
+
+  linha_k <- linhas[
+    grepl(
+      "Potassio \\(K\\):",
+      linhas
+    )
+  ]
+
+  status_k <- ifelse(
+    length(linha_k) > 0 &&
+      grepl("ATIVO", linha_k[1]),
+    "ATIVO",
+    "INATIVO"
+  )
+
+  chuva_3h <- extrair_numero(
+    linhas,
+    "Chuva 3h:"
+  )
+
+  chuva_6h <- extrair_numero(
+    linhas,
+    "Chuva 6h:"
+  )
+
+  chuva_12h <- extrair_numero(
+    linhas,
+    "Chuva 12h:"
+  )
+
+  chuva_24h <- extrair_numero(
+    linhas,
+    "Chuva 24h:"
+  )
+
+  status_meteorologico <- extrair_texto(
+    linhas,
+    "^Status meteorologico:",
+    "^Status meteorologico: "
+  )
+
+  data.frame(
+    arquivo = basename(arquivo),
+    data_hora = data_hora,
+    bomba = bomba,
+    umidade = umidade,
+    ph = ph,
+    pontuacao = pontuacao,
+    decisao = decisao,
+    motivo = motivo,
+    nivel_n = nivel_n,
+    status_n = status_n,
+    nivel_p = nivel_p,
+    status_p = status_p,
+    nivel_k = nivel_k,
+    status_k = status_k,
+    chuva_3h = chuva_3h,
+    chuva_6h = chuva_6h,
+    chuva_12h = chuva_12h,
+    chuva_24h = chuva_24h,
+    status_meteorologico = status_meteorologico,
+    stringsAsFactors = FALSE
+  )
+}
+
+if (length(arquivos_log) > 0) {
+
+  dados <- do.call(
+    rbind,
+    lapply(
+      arquivos_log,
+      analisar_log
+    )
+  )
+
+} else {
+
+  dados <- data.frame(
+    arquivo = character(),
+    data_hora = character(),
+    bomba = character(),
+    umidade = numeric(),
+    ph = numeric(),
+    pontuacao = numeric(),
+    decisao = character(),
+    motivo = character(),
+    nivel_n = numeric(),
+    status_n = character(),
+    nivel_p = numeric(),
+    status_p = character(),
+    nivel_k = numeric(),
+    status_k = character(),
+    chuva_3h = numeric(),
+    chuva_6h = numeric(),
+    chuva_12h = numeric(),
+    chuva_24h = numeric(),
+    status_meteorologico = character(),
+    stringsAsFactors = FALSE
+  )
+}
+
+if (nrow(dados) > 0) {
+
+  dados$data_hora <- as.POSIXct(
+    dados$data_hora,
+    format = "%d/%m/%Y %H:%M:%S"
+  )
+
+  dados <- dados[
+    order(dados$data_hora),
+  ]
+
+  rownames(dados) <- NULL
+}
+
+total_logs <- nrow(dados)
+
+umidade_media <- media_segura(
+  dados$umidade,
+  na.rm = TRUE
+)
+
+ph_medio <- media_segura(
+  dados$ph,
+  na.rm = TRUE
+)
+
+pontuacao_media <- media_segura(
+  dados$pontuacao,
+  na.rm = TRUE
+)
+
+n_medio <- media_segura(
+  dados$nivel_n,
+  na.rm = TRUE
+)
+
+p_medio <- media_segura(
+  dados$nivel_p,
+  na.rm = TRUE
+)
+
+k_medio <- media_segura(
+  dados$nivel_k,
+  na.rm = TRUE
+)
+
+irrigacoes <- sum(
+  dados$decisao == "IRRIGAR",
+  na.rm = TRUE
+)
+
+nao_irrigacoes <- sum(
+  dados$decisao == "NAO IRRIGAR",
+  na.rm = TRUE
+)
+
+bomba_ativa <- sum(
+  dados$bomba == "ATIVA",
+  na.rm = TRUE
+)
+
+percentual_irrigacao <- ifelse(
+  total_logs > 0,
+  irrigacoes / total_logs * 100,
+  0
+)
+
+percentual_nao_irrigacao <- ifelse(
+  total_logs > 0,
+  nao_irrigacoes / total_logs * 100,
+  0
+)
+
+```
+
+# Indicadores gerais
+
+Os indicadores abaixo são recalculados automaticamente a partir de todos os arquivos `.txt` encontrados na pasta `logs/`.
+
+::: {.columns}
+::: {.column width="25%"}
+<div class="card-farmtech"><h3>Registros</h3><div class="card-number">`r total_logs`</div><div class="card-description">logs analisados</div></div>
+:::
+::: {.column width="25%"}
+<div class="card-farmtech"><h3>Umidade média</h3><div class="card-number">`r round(umidade_media, 1)`%</div><div class="card-description">umidade simulada</div></div>
+:::
+::: {.column width="25%"}
+<div class="card-farmtech"><h3>pH médio</h3><div class="card-number">`r round(ph_medio, 2)`</div><div class="card-description">pH simulado</div></div>
+:::
+::: {.column width="25%"}
+<div class="card-farmtech"><h3>Pontuação média</h3><div class="card-number">`r round(pontuacao_media, 2)`</div><div class="card-description">pontuação multicritério</div></div>
+:::
+:::
+
+::: {.columns}
+::: {.column width="25%"}
+<div class="card-farmtech"><h3>Irrigações</h3><div class="card-number">`r irrigacoes`</div><div class="card-description">`r round(percentual_irrigacao, 1)`% dos registros</div></div>
+:::
+::: {.column width="25%"}
+<div class="card-farmtech"><h3>Sem irrigação</h3><div class="card-number">`r nao_irrigacoes`</div><div class="card-description">`r round(percentual_nao_irrigacao, 1)`% dos registros</div></div>
+:::
+::: {.column width="25%"}
+<div class="card-farmtech"><h3>Bomba ativa</h3><div class="card-number">`r bomba_ativa`</div><div class="card-description">registros observados</div></div>
+:::
+::: {.column width="25%"}
+<div class="card-farmtech"><h3>Nutrientes</h3><div class="card-number">`r round((n_medio + p_medio + k_medio) / 3, 1)`%</div><div class="card-description">média N/P/K</div></div>
+:::
+:::
+
+# Decisões de irrigação
+
+## Distribuição das decisões
+
+```{r decisoes-motivos}
+if (nrow(dados) > 0) {
+decisoes <- as.data.frame(
+  table(
+    dados$decisao,
+    useNA = "ifany"
+  ),
+  stringsAsFactors = FALSE
+)
+
+colnames(decisoes) <- c(
+  "decisao",
+  "quantidade"
+)
+
+decisoes$decisao <- as.character(
+  decisoes$decisao
+)
+
+decisoes$decisao[
+  is.na(decisoes$decisao)
+] <- "Sem decisão registrada"
+
+ggplot(
+  decisoes,
+  aes(
+    x = reorder(decisao, quantidade),
+    y = quantidade
+  )
+) +
+
+  geom_col() +
+
+  geom_text(
+    aes(
+      label = quantidade
+    ),
+    hjust = -0.2
+  ) +
+
+  coord_flip() +
+
+  labs(
+    title = "Distribuição das decisões de irrigação",
+    subtitle = paste(
+      total_logs,
+      "registros analisados automaticamente"
+    ),
+    x = NULL,
+    y = "Registros"
+  ) +
+
+  expand_limits(
+    y = max(decisoes$quantidade, na.rm = TRUE) * 1.15
+  ) +
+
+  theme_minimal()
+}
+
+if (nrow(dados) > 0) {
+  motivos <- as.data.frame(
+  table(
+    dados$motivo,
+    useNA = "ifany"
+  ),
+  stringsAsFactors = FALSE
+)
+
+colnames(motivos) <- c(
+  "motivo",
+  "quantidade"
+)
+
+motivos$motivo <- as.character(
+  motivos$motivo
+)
+
+motivos$motivo[
+  is.na(motivos$motivo)
+] <- "Sem motivo registrado"
+
+ggplot(
+  motivos,
+  aes(
+    x = reorder(motivo, quantidade),
+    y = quantidade
+  )
+) +
+
+  geom_col() +
+
+  geom_text(
+    aes(
+      label = quantidade
+    ),
+    hjust = -0.2
+  ) +
+
+  coord_flip() +
+
+  labs(
+    title = "Motivos registrados para as decisões",
+    x = NULL,
+    y = "Registros"
+  ) +
+
+  expand_limits(
+    y = max(motivos$quantidade, na.rm = TRUE) * 1.15
+  ) +
+
+  theme_minimal()
+
+}
+```
+
+## Motivos das decisões
+
+A distribuição dos motivos permite identificar quais regras do sistema mais frequentemente impediram ou permitiram a irrigação.
+
+Isso é importante porque a decisão não depende exclusivamente da pontuação multicritério: a ausência de nutrientes ativos e a previsão de chuva também podem alterar a decisão final.
+
+# Condições ambientais
+
+## Umidade simulada
+
+```{r umidade}
+ggplot(
+  dados,
+  aes(
+    x = data_hora,
+    y = umidade
+  )
+) +
+
+  geom_line() +
+
+  geom_point() +
+
+  geom_hline(
+    yintercept = 40,
+    linetype = "dashed"
+  ) +
+
+  geom_hline(
+    yintercept = 60,
+    linetype = "dashed"
+  ) +
+
+  labs(
+    title = "Evolução da umidade simulada",
+    subtitle = "Referências utilizadas na lógica da simulação",
+    x = "Data e hora",
+    y = "Umidade (%)"
+  ) +
+
+  theme_minimal()
+```
+
+Na lógica implementada, valores abaixo de 40% representam maior necessidade hídrica, enquanto valores a partir de 60% deixam de adicionar pontos de necessidade relacionados à umidade.
+
+## pH simulado
+
+```{r ph}
+  ggplot(
+  dados,
+  aes(
+    x = data_hora,
+    y = ph
+  )
+) +
+
+  geom_line() +
+
+  geom_point() +
+
+  geom_hline(
+    yintercept = 5.5,
+    linetype = "dashed"
+  ) +
+
+  geom_hline(
+    yintercept = 7.0,
+    linetype = "dashed"
+  ) +
+
+  labs(
+    title = "Evolução do pH simulado",
+    subtitle = "Faixa de referência utilizada na simulação: 5,5 a 7,0",
+    x = "Data e hora",
+    y = "pH"
+  ) +
+
+  theme_minimal()
+```
+
+# Pontuação multicritério
+
+```{r pontuacao}
+  ggplot(
+  dados,
+  aes(
+    x = data_hora,
+    y = pontuacao
+  )
+) +
+
+  geom_line() +
+
+  geom_point() +
+
+  geom_hline(
+    yintercept = 3,
+    linetype = "dashed"
+  ) +
+
+  labs(
+    title = "Evolução da pontuação multicritério",
+    subtitle = "Limite utilizado pela lógica de decisão: 3 pontos",
+    x = "Data e hora",
+    y = "Pontuação"
+  ) +
+
+  theme_minimal()
+```
+
+A linha tracejada representa o limite de 3 pontos utilizado pela lógica multicritério.
+
+A pontuação não deve ser interpretada isoladamente. A decisão final também considera a existência de nutrientes ativos e os dados meteorológicos disponíveis.
+
+# Níveis de nutrientes
+
+```{r nutrientes}
+nutrientes <- data.frame(
+
+  data_hora = rep(
+    dados$data_hora,
+    3
+  ),
+
+  nutriente = c(
+
+    rep(
+      "Nitrogênio (N)",
+      nrow(dados)
+    ),
+
+    rep(
+      "Fósforo (P)",
+      nrow(dados)
+    ),
+
+    rep(
+      "Potássio (K)",
+      nrow(dados)
+    )
+  ),
+
+  nivel = c(
+    dados$nivel_n,
+    dados$nivel_p,
+    dados$nivel_k
+  )
+)
+
+ggplot(
+  nutrientes,
+  aes(
+    x = data_hora,
+    y = nivel
+  )
+) +
+
+  geom_line() +
+
+  geom_point() +
+
+  geom_hline(
+    yintercept = 70,
+    linetype = "dashed"
+  ) +
+
+  facet_wrap(
+    ~ nutriente,
+    ncol = 1
+  ) +
+
+  labs(
+    title = "Evolução dos níveis simulados de nutrientes",
+    subtitle = "Referência de atendimento: 70%",
+    x = "Data e hora",
+    y = "Nível (%)"
+  ) +
+
+  theme_minimal()
+```
+
+Na simulação, o nível de 70% é utilizado como referência para considerar o nutriente atendido.
+
+# Integração meteorológica
+
+A integração meteorológica utiliza os dados obtidos pela aplicação Python a partir da previsão meteorológica.
+
+Os registros de precipitação são analisados em diferentes horizontes:
+
+- 3 horas;
+- 6 horas;
+- 12 horas;
+- 24 horas.
+
+```{r meteorologia-preparacao}
+meteorologia_disponivel <- any(
+  !is.na(dados$chuva_3h) |
+  !is.na(dados$chuva_6h) |
+  !is.na(dados$chuva_12h) |
+  !is.na(dados$chuva_24h)
+)
+```
+
+::: {.callout-note}
+## Disponibilidade dos dados
+
+`r if (meteorologia_disponivel) "Existem dados meteorológicos registrados nos logs analisados." else "Os logs analisados atualmente não contêm registros meteorológicos; por isso, esta seção não apresenta uma série de precipitação. A integração meteorológica foi implementada no projeto e os cenários de chuva foram validados separadamente durante os testes do sistema."`
+:::
+
+```{r meteorologia-grafico}
+if (meteorologia_disponivel) {
+
+  chuva <- data.frame(
+
+    data_hora = dados$data_hora,
+
+    `3 horas` = dados$chuva_3h,
+
+    `6 horas` = dados$chuva_6h,
+
+    `12 horas` = dados$chuva_12h,
+
+    `24 horas` = dados$chuva_24h
+  )
+
+  chuva_longa <- chuva |>
+
+    pivot_longer(
+      cols = -data_hora,
+      names_to = "horizonte",
+      values_to = "milimetros"
+    )
+
+  ggplot(
+    chuva_longa,
+    aes(
+      x = data_hora,
+      y = milimetros,
+      group = horizonte
+    )
+  ) +
+
+    geom_line() +
+
+    geom_point() +
+
+    labs(
+      title = "Precipitação prevista registrada",
+      x = "Data e hora",
+      y = "Precipitação prevista (mm)",
+      color = "Horizonte"
+    ) +
+
+    theme_minimal()
+}
+```
+
+A previsão meteorológica funciona como uma camada adicional da tomada de decisão. Quando existe chuva relevante prevista, o sistema pode impedir a irrigação mesmo que os demais critérios indiquem necessidade. Nos logs atuais, entretanto, não há campos meteorológicos persistidos; portanto, não é apropriado inferir uma série histórica de precipitação a partir desses registros.
+
+# Análise dos ciclos de irrigação
+
+Para analisar a dinâmica da bomba, os registros são percorridos cronologicamente.
+
+Um ciclo é identificado quando ocorre:
+
+`INATIVA → ATIVA → INATIVA`
+
+Essa abordagem permite que o relatório continue funcionando quando novos ciclos forem registrados.
+
+```{r ciclos-calculo}
+dados$estado_bomba_anterior <- dplyr::lag(
+  dados$bomba
+)
+
+inicio_indices <- which(
+  dados$bomba == "ATIVA" &
+    (
+      is.na(dados$estado_bomba_anterior) |
+      dados$estado_bomba_anterior != "ATIVA"
+    )
+)
+
+ciclos <- list()
+
+if (length(inicio_indices) > 0) {
+
+  for (inicio_idx in inicio_indices) {
+
+    fim_indices <- which(
+      seq_len(nrow(dados)) > inicio_idx &
+        dados$bomba == "INATIVA"
+    )
+
+    if (length(fim_indices) > 0) {
+
+      fim_idx <- fim_indices[1]
+
+      inicio <- dados[inicio_idx, ]
+      fim <- dados[fim_idx, ]
+
+      ciclos[[length(ciclos) + 1]] <- data.frame(
+
+        inicio = inicio$data_hora,
+
+        fim = fim$data_hora,
+
+        janela_segundos = as.numeric(
+          difftime(
+            fim$data_hora,
+            inicio$data_hora,
+            units = "secs"
+          )
+        ),
+
+        umidade_inicio = inicio$umidade,
+
+        umidade_fim = fim$umidade,
+
+        variacao_umidade =
+          fim$umidade -
+          inicio$umidade,
+
+        ph_inicio = inicio$ph,
+
+        ph_fim = fim$ph,
+
+        variacao_ph =
+          fim$ph -
+          inicio$ph,
+
+        n_inicio = inicio$nivel_n,
+
+        n_fim = fim$nivel_n,
+
+        p_inicio = inicio$nivel_p,
+
+        p_fim = fim$nivel_p,
+
+        k_inicio = inicio$nivel_k,
+
+        k_fim = fim$nivel_k,
+
+        pontuacao_inicio =
+          inicio$pontuacao,
+
+        pontuacao_fim =
+          fim$pontuacao,
+
+        decisao_final =
+          fim$decisao,
+
+        stringsAsFactors = FALSE
+      )
+    }
+  }
+}
+
+if (length(ciclos) > 0) {
+
+  ciclos_df <- do.call(
+    rbind,
+    ciclos
+  )
+
+} else {
+
+  ciclos_df <- data.frame()
+}
+```
+
+1 Resumo dos ciclos
+
+```{r ciclos-resumo}
+numero_ciclos <- nrow(ciclos_df)
+
+if (numero_ciclos > 0) {
+
+  ciclos_resumo <- ciclos_df |>
+    mutate(
+      inicio = format(
+        inicio,
+        "%d/%m/%Y %H:%M:%S"
+      ),
+
+      fim = format(
+        fim,
+        "%d/%m/%Y %H:%M:%S"
+      ),
+
+      janela_segundos =
+        round(janela_segundos, 0)
+    ) |>
+
+    mutate(Ciclo = row_number()) |>
+
+    select(
+      Ciclo,
+      `Início` = inicio,
+      `Fim` = fim,
+      `Janela observada (s)` =
+        janela_segundos,
+      `Umidade inicial (%)` =
+        umidade_inicio,
+      `Umidade final (%)` =
+        umidade_fim,
+      `Variação umidade (p.p.)` =
+        variacao_umidade,
+      `pH inicial` =
+        ph_inicio,
+      `pH final` =
+        ph_fim,
+      `Variação pH` =
+        variacao_ph,
+      `N final (%)` =
+        n_fim,
+      `P final (%)` =
+        p_fim,
+      `K final (%)` =
+        k_fim
+    )
+
+  ciclos_resumo
+}
+```
+
+::: {.callout-important}
+## Observação sobre a duração
+
+A janela observada representa o intervalo entre o primeiro log com a bomba ATIVA e o primeiro log posterior com a bomba INATIVA.
+
+Como os logs são capturados em intervalos discretos, esse valor não representa necessariamente o tempo físico exato em que o relé permaneceu acionado. Ele representa o intervalo observado pela coleta de logs.
+:::
+
+# Ciclo mais recente
+
+```{r ciclo-recente-calculo}
+if (numero_ciclos > 0) {
+
+  ultimo_ciclo <- ciclos_df[
+    nrow(ciclos_df),
+  ]
+
+} else {
+
+  ultimo_ciclo <- NULL
+}
+```
+
+::: {.callout-tip}
+## Resultado do ciclo mais recente
+
+`r if (numero_ciclos > 0) paste0("Foram identificados ", numero_ciclos, " ciclo(s) completo(s) nos registros analisados.") else "Nenhum ciclo completo de irrigação foi identificado nos registros atuais."`
+:::
+
+```{r ciclo-recente-resumo}
+if (numero_ciclos > 0) {
+
+  cat(
+    "Início observado: ",
+    format(
+      ultimo_ciclo$inicio,
+      "%d/%m/%Y %H:%M:%S"
+    ),
+    "\n\n",
+    sep = ""
+  )
+
+  cat(
+    "Fim observado: ",
+    format(
+      ultimo_ciclo$fim,
+      "%d/%m/%Y %H:%M:%S"
+    ),
+    "\n\n",
+    sep = ""
+  )
+
+  cat(
+    "Janela observada: ",
+    ultimo_ciclo$janela_segundos,
+    " segundos",
+    "\n\n",
+    sep = ""
+  )
+}
+```
+
+1 Evolução durante o ciclo mais recente
+
+```{r ciclo-recente-grafico}
+if (numero_ciclos > 0) {
+
+  inicio_ciclo <- which(
+    dados$data_hora ==
+      ultimo_ciclo$inicio
+  )[1]
+
+  fim_ciclo <- which(
+    dados$data_hora ==
+      ultimo_ciclo$fim
+  )[1]
+
+  dados_ciclo <- dados[
+    inicio_ciclo:fim_ciclo,
+  ]
+
+  dados_ciclo_long <- dados_ciclo |>
+
+    select(
+      data_hora,
+      umidade,
+      ph
+    ) |>
+
+    pivot_longer(
+      cols = c(
+        umidade,
+        ph
+      ),
+      names_to = "variavel",
+      values_to = "valor"
+    )
+
+  ggplot(
+    dados_ciclo_long,
+    aes(
+      x = data_hora,
+      y = valor
+    )
+  ) +
+
+    geom_line() +
+
+    geom_point() +
+
+    facet_wrap(
+      ~ variavel,
+      scales = "free_y"
+    ) +
+
+    labs(
+      title = "Evolução das variáveis durante o ciclo mais recente",
+      x = "Data e hora",
+      y = "Valor"
+    ) +
+
+    theme_minimal()
+}
+```
+
+2 Comparação inicial e final
+
+```{r ciclo-recente-tabela}
+if (numero_ciclos > 0) {
+
+  tabela_ciclo <- data.frame(
+
+    Variável = c(
+      "Umidade simulada",
+      "pH simulado",
+      "Nitrogênio (N)",
+      "Fósforo (P)",
+      "Potássio (K)",
+      "Pontuação"
+    ),
+
+    Início = c(
+      ultimo_ciclo$umidade_inicio,
+      ultimo_ciclo$ph_inicio,
+      ultimo_ciclo$n_inicio,
+      ultimo_ciclo$p_inicio,
+      ultimo_ciclo$k_inicio,
+      ultimo_ciclo$pontuacao_inicio
+    ),
+
+    Final = c(
+      ultimo_ciclo$umidade_fim,
+      ultimo_ciclo$ph_fim,
+      ultimo_ciclo$n_fim,
+      ultimo_ciclo$p_fim,
+      ultimo_ciclo$k_fim,
+      ultimo_ciclo$pontuacao_fim
+    )
+  )
+
+  tabela_ciclo$Variação <- round(
+    tabela_ciclo$Final -
+      tabela_ciclo$Início,
+    2
+  )
+
+  tabela_ciclo
+}
+```
+
+No conjunto atual de dados, o ciclo observado demonstra a evolução da simulação desde uma condição inicial de maior necessidade até uma condição na qual a pontuação multicritério deixa de atingir o limite de irrigação.
+
+# Estado da bomba
+
+```{r estado-bomba}
+ggplot(
+  dados,
+  aes(
+    x = data_hora,
+    y = ifelse(
+      bomba == "ATIVA",
+      1,
+      0
+    )
+  )
+) +
+
+  geom_step() +
+
+  scale_y_continuous(
+    breaks = c(
+      0,
+      1
+    ),
+    labels = c(
+      "INATIVA",
+      "ATIVA"
+    )
+  ) +
+
+  labs(
+    title = "Estado da bomba ao longo dos registros",
+    x = "Data e hora",
+    y = "Estado"
+  ) +
+
+  theme_minimal()
+```
+
+# Resumo automático dos motivos
+
+```{r motivos-resumo}
+motivos_resumo <- dados |>
+
+  mutate(
+    motivo = ifelse(
+      is.na(motivo),
+      "Sem motivo registrado",
+      motivo
+    )
+  ) |>
+
+  count(
+    motivo,
+    name = "registros"
+  ) |>
+
+  arrange(
+    desc(registros)
+  )
+
+motivos_resumo
+```
+
+# Dados completos
+
+A tabela abaixo apresenta os registros utilizados na análise.
+
+```{r dados-completos}
+dados_tabela <- dados
+
+dados_tabela$data_hora <- format(
+  dados_tabela$data_hora,
+  "%d/%m/%Y %H:%M:%S"
+)
+
+dados_tabela
+```
+
+# Conclusão
+
+A análise automatizada demonstra que o sistema de irrigação inteligente utiliza múltiplas variáveis para apoiar a decisão de acionamento da bomba.
+
+Os registros permitem acompanhar simultaneamente:
+
+- condições de umidade;
+- pH simulado;
+- níveis de N, P e K;
+- pontuação multicritério;
+- decisões de irrigação;
+- motivos das decisões;
+- estado da bomba;
+- previsão de precipitação; e
+- evolução dos ciclos de irrigação.
+
+A estrutura implementada em R permite que a análise seja escalável para novos registros. Dessa forma, novos arquivos adicionados ao diretório `logs/` são incorporados automaticamente na próxima renderização do relatório.
+
+No conjunto atual de dados, foram analisados `r total_logs` registros, sendo identificados `r irrigacoes` registros com decisão de irrigação e `r nao_irrigacoes` registros sem irrigação.
+
+O relatório também identificou automaticamente `r numero_ciclos` ciclo(s) completo(s) de irrigação.
+
+::: {.callout-note}
+
+Limitações da simulação
+
+Os valores de umidade e pH utilizados pelo sistema representam variáveis simuladas para demonstrar o funcionamento da lógica de decisão.
+
+Da mesma forma, os efeitos da irrigação sobre as variáveis ambientais e os níveis de nutrientes são parâmetros definidos para a simulação e não devem ser interpretados como um modelo agronômico real.
+
+A integração meteorológica também depende da previsão fornecida pela API utilizada e está sujeita às limitações inerentes às previsões meteorológicas.
+
+Portanto, os resultados demonstram o funcionamento técnico da arquitetura e da lógica de decisão proposta, não constituindo uma validação agronômica para uso em campo.
+:::
+
+# Reprodutibilidade
+
+Para gerar este relatório novamente, mantenha o arquivo `relatorio.qmd` na pasta `R/` e os logs na pasta `logs/` do projeto. Todo arquivo `.txt` novo será lido automaticamente na próxima renderização.
+
+```powershell
+& "C:\Users\Lucas\AppData\Local\Programs\Quarto\bin\quarto.exe" render "R/relatorio.qmd"
+```

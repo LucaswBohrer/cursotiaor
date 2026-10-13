@@ -1,0 +1,234 @@
+{
+  "version": 1,
+  "author": "Lucas Bohrer",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "board-esp32-devkit-c-v4",
+      "id": "esp",
+      "top": 0,
+      "left": 0,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-slide-switch",
+      "id": "switchN",
+      "top": 30,
+      "left": -180,
+      "attrs": {
+        "color": "green",
+        "label": "N",
+        "value": "1"
+      }
+    },
+    {
+      "type": "wokwi-slide-switch",
+      "id": "switchP",
+      "top": 90,
+      "left": -180,
+      "attrs": {
+        "color": "green",
+        "label": "P",
+        "value": "1"
+      }
+    },
+    {
+      "type": "wokwi-slide-switch",
+      "id": "switchK",
+      "top": 150,
+      "left": -180,
+      "attrs": {
+        "color": "green",
+        "label": "K",
+        "value": "1"
+      }
+    },
+    {
+      "type": "wokwi-photoresistor-sensor",
+      "id": "ldr",
+      "top": 260,
+      "left": -180,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-dht22",
+      "id": "dht",
+      "top": 30,
+      "left": 250,
+      "attrs": {
+        "temperature": "23.5",
+        "humidity": "45.8"
+      }
+    },
+    {
+      "type": "wokwi-relay-module",
+      "id": "relay",
+      "top": 180,
+      "left": 250,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led",
+      "top": 300,
+      "left": 300,
+      "attrs": {
+        "color": "blue"
+      }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "resistorLed",
+      "top": 300,
+      "left": 210,
+      "attrs": {
+        "value": "220"
+      }
+    }
+  ],
+  "connections": [
+    [
+      "esp:TX",
+      "$serialMonitor:RX",
+      "",
+      []
+    ],
+    [
+      "esp:RX",
+      "$serialMonitor:TX",
+      "",
+      []
+    ],
+    [
+      "switchN:1",
+      "esp:GND.1",
+      "black",
+      []
+    ],
+    [
+      "switchN:2",
+      "esp:18",
+      "green",
+      []
+    ],
+    [
+      "switchN:3",
+      "esp:3V3",
+      "red",
+      []
+    ],
+    [
+      "switchP:1",
+      "esp:GND.1",
+      "black",
+      []
+    ],
+    [
+      "switchP:2",
+      "esp:19",
+      "green",
+      []
+    ],
+    [
+      "switchP:3",
+      "esp:3V3",
+      "red",
+      []
+    ],
+    [
+      "switchK:1",
+      "esp:GND.1",
+      "black",
+      []
+    ],
+    [
+      "switchK:2",
+      "esp:21",
+      "green",
+      []
+    ],
+    [
+      "switchK:3",
+      "esp:3V3",
+      "red",
+      []
+    ],
+    [
+      "ldr:VCC",
+      "esp:3V3",
+      "red",
+      []
+    ],
+    [
+      "ldr:GND",
+      "esp:GND.1",
+      "black",
+      []
+    ],
+    [
+      "ldr:AO",
+      "esp:34",
+      "green",
+      []
+    ],
+    [
+      "dht:VDD",
+      "esp:3V3",
+      "red",
+      []
+    ],
+    [
+      "dht:SDA",
+      "esp:4",
+      "green",
+      []
+    ],
+    [
+      "dht:GND",
+      "esp:GND.1",
+      "black",
+      []
+    ],
+    [
+      "relay:VCC",
+      "esp:5V",
+      "red",
+      []
+    ],
+    [
+      "relay:GND",
+      "esp:GND.1",
+      "black",
+      []
+    ],
+    [
+      "relay:IN",
+      "esp:16",
+      "green",
+      []
+    ],
+    [
+      "esp:17",
+      "resistorLed:1",
+      "green",
+      []
+    ],
+    [
+      "resistorLed:2",
+      "led:A",
+      "green",
+      []
+    ],
+    [
+      "led:C",
+      "esp:GND.1",
+      "black",
+      []
+    ]
+  ],
+  "serialMonitor": {
+    "display": "always",
+    "newline": "lf"
+  },
+  "dependencies": {}
+}

@@ -1,0 +1,57 @@
+============================================================
+        FARMTECH SOLUTIONS - REGISTRO DE LOG
+============================================================
+
+Data/hora da captura: 21/09/2026 09:51:22
+
+============================================================
+
+
+============================================================
+              FARMTECH SOLUTIONS - LOG
+============================================================
+
+STATUS DA IRRIGACAO
+Bomba: INATIVA
+Pontuacao multicriterio: 0
+
+NUTRIENTES:
+Nitrogenio (N): INATIVO | Nivel: 70.0 | FORA DO CICLO
+Fosforo (P): INATIVO | Nivel: 68.0 | FORA DO CICLO
+Potassio (K): INATIVO | Nivel: 40.0 | FORA DO CICLO
+
+SENSORES:
+DHT22 - Temperatura: 23.50 C
+DHT22 - Umidade medida: 45.80 %
+Umidade simulada: 81.80 %
+LDR: 1001
+pH simulado: 5.67
+
+METEOROLOGIA:
+Chuva prevista 3h : 13.82 mm
+Chuva prevista 6h : 27.75 mm
+Chuva prevista 12h: 45.12 mm
+Chuva prevista 24h: 45.40 mm
+Status meteorologico: CHUVA_FORTE_PROXIMA
+
+DECISAO MULTICRITERIO:
+Pontuacao: 0
++0 Umidade adequada
++0 pH adequado
+
+DECISAO METEOROLOGICA:
+Chuva relevante prevista.
+Precipitacao prevista em 3h: 13.82 mm
+Status: CHUVA_FORTE_PROXIMA
+Irrigacao podera ser suspensa.
+
+DECISAO: NAO IRRIGAR
+Motivo: nenhum nutriente esta ativo.
+
+STATUS: IRRIGACAO INATIVA
+============================================================
+########### LOG_FIM ###########
+
+============================================================
+                 FIM DO REGISTRO
+============================================================

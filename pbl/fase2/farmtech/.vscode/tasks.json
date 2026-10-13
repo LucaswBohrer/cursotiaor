@@ -1,0 +1,50 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "FarmTech: Logger",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "python/logger.py"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "focus": false,
+                "clear": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "FarmTech: Weather",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "python/weather.py"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "focus": false,
+                "clear": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "FarmTech: Iniciar ambiente",
+            "dependsOn": [
+                "FarmTech: Logger",
+                "FarmTech: Weather"
+            ],
+            "dependsOrder": "parallel",
+            "problemMatcher": []
+        }
+    ]
+}
