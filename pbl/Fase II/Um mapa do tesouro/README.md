@@ -10,6 +10,10 @@
 
 ## Sistema de Irrigação Inteligente com ESP32, Simulação Ambiental e Integração Meteorológica
 
+## 🎬 Vídeo de apresentação
+
+▶️ [Assista ao vídeo do projeto no YouTube](https://youtu.be/U-hXnQBrue4)
+
 ## 👨‍🎓 Integrantes
 
 - **Gabriel Kuwamoto** — RM567125
