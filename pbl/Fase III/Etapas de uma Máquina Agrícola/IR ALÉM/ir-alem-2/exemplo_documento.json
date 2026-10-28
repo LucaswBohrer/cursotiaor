@@ -1,0 +1,1 @@
+{"_id":"ObjectId gerado pelo MongoDB na carga (nao fixo neste exemplo)","bomba_ligada":0,"cultura":"milho","data_hora":"2026-09-18T17:24:12","fosforo":68.0,"nitrogenio":70.0,"origem":"real","ph":6.17,"potassio":67.0,"sensores":{"nutrientes":"S3","ph":"S2","umidade":"S1"},"umidade":99.8}

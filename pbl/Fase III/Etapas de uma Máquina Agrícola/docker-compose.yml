@@ -1,0 +1,44 @@
+# FarmTech Solutions - Fase 3: ambientes locais via Docker
+# Decisao do grupo (28/10/2026): Docker local (opcao 1).
+# Uso (na maquina do grupo, com Docker Desktop instalado):
+#   docker compose up -d            # sobe Oracle + Mongo
+#   docker compose up -d oracle     # so Oracle
+#   docker compose up -d mongo      # so Mongo (Ir Alem 2)
+#   docker compose ps               # ver se estao saudaveis
+#   docker compose down             # parar (os dados ficam nos volumes)
+#   docker compose down -v          # parar E apagar os dados (cuidado)
+#
+# Oracle: imagem gvenzl/oracle-free (Oracle Database Free).
+#   - DSN para carga_oracle.py: localhost:1521/FREEPDB1
+#   - Usuario de aplicacao: criar apos subir (ver README, passo 2).
+#     A senha do SYS/SYSTEM e a variavel ORACLE_PASSWORD abaixo.
+#     NAO versionar senha real: troque antes de subir.
+# Mongo: imagem oficial, sem autenticacao, apenas rede local.
+#   - URI: mongodb://localhost:27017
+services:
+  oracle:
+    image: gvenzl/oracle-free:latest
+    container_name: farmtech-oracle
+    environment:
+      ORACLE_PASSWORD: "trocar-esta-senha"
+    ports:
+      - "1521:1521"
+    volumes:
+      - oracle-data:/opt/oracle/oradata
+    healthcheck:
+      test: ["CMD-SHELL", "healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+
+  mongo:
+    image: mongo:latest
+    container_name: farmtech-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+volumes:
+  oracle-data:
+  mongo-data:

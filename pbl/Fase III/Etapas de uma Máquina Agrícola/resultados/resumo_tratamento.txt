@@ -1,0 +1,17 @@
+Linhas brutas: 2192
+Linhas descartadas na limpeza: 14
+Linhas tratadas: 2178
+Dias cobertos: 93
+Horas de bomba ligada: 373
+Acionamentos: 343
+Agua estimada total (L): 44760
+Umidade media: 30.76 %
+pH medio: 6.18
+Leituras fora da faixa de pH do milho (5,5-6,5): 114 (5.2%)
+Correlacao com bomba ligada:
+ph             -0.005793
+nitrogenio      0.037263
+potassio        0.058520
+fosforo         0.130903
+umidade         0.152449
+bomba_ligada    1.000000
