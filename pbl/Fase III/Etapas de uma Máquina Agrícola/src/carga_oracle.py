@@ -81,9 +81,15 @@ def main() -> None:
     conn = oracledb.connect(user=user, password=password, dsn=dsn)
     cur = conn.cursor()
     try:
+        # Nota: o driver oracledb thin conta cada OCORRENCIA de bind,
+        # mesmo repetida (:1 no USING e no VALUES conta duas vezes).
+        # Por isso o USING usa numeros distintos (:8, :9...) e os
+        # valores da chave sao repetidos no fim da lista de binds.
+        # Sem isso, a carga falha com DPY-4009 (binds a mais que
+        # os valores fornecidos). A logica do MERGE nao muda.
         for c in manejo["culturas"]:
             cur.execute(
-                """MERGE INTO TB_CULTURA t USING (SELECT :1 id, :2 nome FROM DUAL) s
+                """MERGE INTO TB_CULTURA t USING (SELECT :8 id FROM DUAL) s
                    ON (t.ID_CULTURA = s.id)
                    WHEN NOT MATCHED THEN INSERT
                    (ID_CULTURA, NOME, NOME_CIENTIFICO, AREA_HA, PH_IDEAL_MIN,
@@ -91,11 +97,11 @@ def main() -> None:
                    VALUES (:1, :2, :3, :4, :5, :6, :7)""",
                 [c["id_cultura"], c["nome"], c.get("nome_cientifico"),
                  c.get("area_ha"), c.get("ph_ideal_min"), c.get("ph_ideal_max"),
-                 c.get("observacao")],
+                 c.get("observacao"), c["id_cultura"]],
             )
         for m in manejo["manejo"]:
             cur.execute(
-                """MERGE INTO TB_MANEJO t USING (SELECT :1 id FROM DUAL) s
+                """MERGE INTO TB_MANEJO t USING (SELECT :8 id FROM DUAL) s
                    ON (t.ID_MANEJO = s.id)
                    WHEN NOT MATCHED THEN INSERT
                    (ID_MANEJO, ID_CULTURA, DATA_MANEJO, ATIVIDADE, INSUMO,
@@ -103,7 +109,7 @@ def main() -> None:
                    VALUES (:1, :2, TO_DATE(:3, 'YYYY-MM-DD'), :4, :5, :6, :7)""",
                 [m["id_manejo"], m["id_cultura"], m["data_manejo"],
                  m["atividade"], m["insumo"], m["quantidade_insumo"],
-                 m["unidade_insumo"]],
+                 m["unidade_insumo"], m["id_manejo"]],
             )
         # Sensores: S1 umidade, S2 pH, S3 fosforo, S3N nitrogenio.
         # Potassio: gravado como S3K para nao perder dado da Fase 2.
@@ -120,10 +126,11 @@ def main() -> None:
                 ("S3K", row.potassio, "%"),
                 ("S3N", row.nitrogenio, "%"),
             ]:
-                registros.append((ts, sensor, 1, float(valor), unidade, origem))
+                registros.append((ts, sensor, 1, float(valor), unidade, origem,
+                                    ts, sensor))
         cur.executemany(
             """MERGE INTO TB_LEITURA_SENSOR t
-               USING (SELECT :1 dh, :2 s FROM DUAL) s
+               USING (SELECT :7 dh, :8 s FROM DUAL) s
                ON (t.DATA_HORA = s.dh AND t.ID_SENSOR = s.s)
                WHEN NOT MATCHED THEN INSERT
                (DATA_HORA, ID_SENSOR, ID_CULTURA, VALOR, UNIDADE, ORIGEM)
@@ -132,12 +139,13 @@ def main() -> None:
         )
         bomba = [
             (row.data_hora.to_pydatetime(), 1, int(row.bomba_ligada),
-             int(row.bomba_ligada) * VAZAO_L_H, str(row.origem))
+             int(row.bomba_ligada) * VAZAO_L_H, str(row.origem),
+             row.data_hora.to_pydatetime())
             for row in tratadas.itertuples(index=False)
         ]
         cur.executemany(
             """MERGE INTO TB_BOMBA_HISTORICO t
-               USING (SELECT :1 dh FROM DUAL) s ON (t.DATA_HORA = s.dh)
+               USING (SELECT :6 dh FROM DUAL) s ON (t.DATA_HORA = s.dh)
                WHEN NOT MATCHED THEN INSERT
                (DATA_HORA, ID_CULTURA, BOMBA_LIGADA, AGUA_L, ORIGEM)
                VALUES (:1, :2, :3, :4, :5)""",
